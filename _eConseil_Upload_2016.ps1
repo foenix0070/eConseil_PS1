@@ -1,6 +1,6 @@
-﻿Add-Type -Path "c:\ISAPI\Microsoft.SharePoint.Client.dll" 
-Add-Type -Path "c:\ISAPI\Microsoft.SharePoint.Client.Runtime.dll" 
-Add-Type -Path "c:\ISAPI\Microsoft.SharePoint.Client.Taxonomy.dll" 
+﻿Add-Type -Path "c:\Program Files\Common Files\microsoft shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.dll" 
+Add-Type -Path "c:\Program Files\Common Files\microsoft shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.Runtime.dll" 
+Add-Type -Path "c:\Program Files\Common Files\microsoft shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.Taxonomy.dll" 
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -222,10 +222,10 @@ function Process-RestoreBackUp {
 
 #Assignation des variables
 Write-Progression -Texte "Initialisation des variables de connexion..."
-$url = "https://test-econseil2016.gouv.ci";
+$url = "https://test-econseil2016.gouv.ci/";
 $login = "GOUV\inova.econseil";
 $pwdstring = "Inov@2017";
-$backUpFolder = "C:\eGouv";
+$backUpFolder = "D:\Save";
 
 #Execution du telechargement
  Write-Progression -Texte "Debut la de connexion..."
