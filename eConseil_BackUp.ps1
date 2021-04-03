@@ -13,6 +13,10 @@
 $constant_Calendar_Prefix = 'Cal_';
 $constant_Calendar_WorkSpace_Field = 'Workspace';
 
+$information = 'Information';
+$erreur = 'Exception';
+$fichier = 'File';
+
 #Variables
 $backUpFolder = "E:\eGouv";
 $siteUrl="http://econseilv1migration.gouv.ci" #"http://econseil-test.egouv.ci/";
@@ -23,7 +27,42 @@ $startDate = Get-Date -Month 11 -Day 23 -Year 2000 -Hour 00 -Minute 00 -Second 0
 $endDate = Get-Date -Month 11 -Day 23 -Year 2021 -Hour 00 -Minute 00 -Second 00;
 
 #Start Script
-cd $backUpFolder;
+
+
+function Write-In-Log_File {
+  param ($p_file_name,  $p_file_content , $p_message_type = 'Informations')
+
+  $today = Get-Date;
+  $Contenu = "$today ===> [$p_message_type]   $p_file_content";
+  try {
+     Add-Content -Path $p_file_name -Value $Contenu 
+  }
+  catch {
+      throw $_.Exception.Message
+  }
+
+}
+
+function Create-Log_File {
+  param ($p_file_content ,  $p_message_type = 'Informations') 
+  $fileName = $backUpFolder + '\import-econseil.log';
+
+  #If the file does not exist, create it.
+  if (-not(Test-Path -Path $fileName -PathType Leaf)) {
+      try {
+          $null = New-Item -ItemType File -Path $fileName -Force -ErrorAction Stop
+          Write-Host "Le fichier de log [$file] a été crée."
+      }
+      catch {
+          throw $_.Exception.Message
+      }
+  }
+#  else {
+#      Write-Host "Le fichier log  [$file] exite déjà.";
+#      Read-Host 'Nous allons recrée le fichier le fichier, veuillez faire une sauvegarde du fichier et appuyer sur une touche'
+#    }
+  Write-In-Log_File -p_file_name  $fileName -p_file_content $p_file_content -p_message_type  $p_message_type;
+}
 
 function Get-Fields{
    param ($p_spList)
@@ -145,10 +184,18 @@ function Get-LirairiesFiles{
  $str_url = Get-Calendar_WorkSpace -p_spItem $p_item; 
  $f_sw = Get-SPWeb $str_url;
  $f_lists = $f_sw.lists  | Where-Object  { ($_.hidden -eq $false) -and ($_.IsSiteAssetsLibrary -eq $false) -and ($_.BaseType -eq "DocumentLibrary")} ;
+
+ $msg = "Recupération de bibliotheque de documents dans espace :: $str_url";
+ Create-Log_File -p_file_content $msg  -p_message_type  'Information' ; 
+
   foreach ($l  in $f_lists ) {
    
        $str_folder_name = $l.Rootfolder.Name; 
        Create-Folder $str_folder_name;
+
+
+       $msg = "Creation de la bibiloteque $str_folder_name";
+       Create-Log_File -p_file_content $msg  -p_message_type  'Information' ;
 
        $strCurrentDirectory =  Get-Location  ;
        $str_folder_name =   $strCurrentDirectory.Path + "/" + $str_folder_name ;
@@ -159,13 +206,21 @@ function Get-LirairiesFiles{
         if($DocLibItem.Url -Like "*.pdf") {
              
             $File = $f_sw.GetFile($DocLibItem.Url)
+            $path_file = $str_folder_name + "\" + $File.Name
             $Binary = $File.OpenBinary()
-            $Stream = New-Object System.IO.FileStream( $str_folder_name + "\" + $File.Name), Create
+            $Stream = New-Object System.IO.FileStream(  $path_file), Create
             $Writer = New-Object System.IO.BinaryWriter($Stream)
             $Writer.write($Binary)
             $Writer.Close()
             
+            $msg = "Telechargement  $path_file";
+            Create-Log_File -p_file_content $msg  -p_message_type  'Information' ;
+
              WriteFileProperty  -p_file $File -p_destination  $str_folder_name ; 
+
+             $msg = "Copie des propriétes  $path_file";
+             Create-Log_File -p_file_content $msg  -p_message_type  'Information' ;
+ 
         }
     }
        
@@ -184,8 +239,14 @@ function Create-ListProperty{
 
 
  $Lists = $f_sw.lists  | Where-Object  { ($_.hidden -eq $false) } #-and ($_.BaseType -eq "GenericList") -and ($_.IsSiteAssetsLibrary -eq $false) 
+
+ $msg = "Recupération imformation de listes et biblioteque ";
+ Create-Log_File -p_file_content $msg  -p_message_type  'Information' ;
   foreach ($l  in $Lists ) {
    
+    $msg = "Recupération imformation de listes et biblioteque " + $l.Title ;
+    Create-Log_File -p_file_content $msg  -p_message_type  'Information' ; 
+
     $str += '<propertyList ' ;
     $str += 'RootFolder="' + ($l.RootFolder.Name) + '" ';
     $str += 'Title="' + ($l.Title) + '" ';
@@ -223,18 +284,38 @@ function Create-CalendarFolder{
   foreach ($item in $p_items ) {
       $str = '';
       $strName  = $constant_Calendar_Prefix  + $item.ID  ;
+      
       Create-Folder $strName;
+      $str_message = "creation dossier de calendrier $strName";
+      Create-Log_File -p_file_content  $str_message -p_message_type  'Information' ;
+
       cd $strName;
        
      $str = Create-FullProperty -p_item $item -p_fields $p_calendarFields -p_str $str ; 
      $strName= $strName +'.xml' ;
+
      Create-XmlFileWithContent -p_fileName $strName -p_fileContent $str;
-    
+
+     $str_message = "creation fichier de propriété  $strName";
+     Create-Log_File -p_file_content  $str_message -p_message_type  'Information' ;
+ 
+     Create-Log_File -p_file_content  'Telechargement des fichiers de calendrier' -p_message_type  'Information' ;
      Get-LirairiesFiles $item;
     
     cd ..;
   }
 }
+
+
+function Process-BackUp {
+  param ($startDate , $endDate )
+
+cd $backUpFolder;
+
+#Execution de la sauvegarde des éléments du calendrier et de l'espace dédié
+Clear-Host
+Create-Log_File -p_file_content 'Debut de la sauvegarde' ;
+write-host 'Debut de la sauvegarde ' -foregroundcolor DarkGreen -backgroundcolor white
 
 #Recuperation des éléments du calendrier
 #[microsoft.sharepoint.utilities.sputility]::CreateISO8601DateTimeFromSystemDateTime
@@ -245,22 +326,34 @@ $QueryString +=  '</Value></Geq><Lt><FieldRef Name="Created" /><Value Type="Date
 $QueryString += [microsoft.sharepoint.utilities.sputility]::CreateISO8601DateTimeFromSystemDateTime($endDate) ;
 $QueryString += '</Value></Lt></And></Where>';
  
+Create-Log_File -p_file_content $QueryString -p_message_type  'Query' ;
 
-$spqQuery = New-Object Microsoft.SharePoint.SPQuery
-$spqQuery.ViewAttributes = "Scope = 'Recursive'"
-$spqQuery.RowLimit = $SPList.ItemCount
-$spqQuery.Query =   $QueryString
- 
- 
-$oWeb=Get-SPWeb $siteUrl;
+try {
+  $spqQuery = New-Object Microsoft.SharePoint.SPQuery
+  $spqQuery.ViewAttributes = "Scope = 'Recursive'"
+  $spqQuery.RowLimit = $SPList.ItemCount
+  $spqQuery.Query =   $QueryString
+  
+  
+  $oWeb=Get-SPWeb $siteUrl;
+  $SPCalendar=$oWeb.Lists[$listPrincipalName];
+  $SPCalendarItems =  $SPCalendar.getItems($spqQuery);
+  $SPCalendarField =  Get-Fields $SPCalendar;
+
+  $str_message  = $SPCalendarItems.Count +' calendriers trouvés';
+  Create-Log_File -p_file_content  $str_message -p_message_type  'Information' ;
+  Create-CalendarFolder -p_items $SPCalendarItems -p_calendarFields $SPCalendarField ;
+}
+catch {
+  $ex = $_.Exception.Message ;
+  Create-Log_File -p_file_content $ex -p_message_type  'Exeception' ;
+  throw $ex;
+}
 
 
-$SPCalendar=$oWeb.Lists[$listPrincipalName];
-$SPCalendarItems =  $SPCalendar.getItems($spqQuery);
-$SPCalendarField =  Get-Fields $SPCalendar;
-
-#Execution de la sauvegarde des éléments du calendrier et de l'espace dédié
-Clear-Host
-write-host 'Debut de la sauvegarde ' -foregroundcolor DarkGreen -backgroundcolor white
-Create-CalendarFolder -p_items $SPCalendarItems -p_calendarFields $SPCalendarField ;
+Create-Log_File -p_file_content 'Fin de la sauvegarde ' ;
 write-host 'Fin de la sauvegarde ' -foregroundcolor DarkGreen -backgroundcolor white
+
+}
+
+Process-BackUp -endDate $endDate -startDate $startDate ;
