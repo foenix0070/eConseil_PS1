@@ -51,7 +51,7 @@ function Write-In-Log_File {
 
 function Create-Log_File {
   param ($p_file_content ,  $p_message_type = 'Informations') 
-  $fileName = $backUpFolder + '\export-econseil.log';
+  $fileName = $backUpFolder + '\import-econseil.log';
 
   #If the file does not exist, create it.
   if (-not(Test-Path -Path $fileName -PathType Leaf)) {

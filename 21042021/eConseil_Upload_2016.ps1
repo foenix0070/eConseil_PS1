@@ -1,6 +1,6 @@
-﻿Add-Type -Path "C:\Program Files\Common Files\microsoft shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.dll" 
-Add-Type -Path "C:\Program Files\Common Files\microsoft shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.Runtime.dll" 
-Add-Type -Path "C:\Program Files\Common Files\microsoft shared\Web Server Extensions\16\ISAPI\Microsoft.SharePoint.Client.Taxonomy.dll" 
+﻿Add-Type -Path "c:\ISAPI\Microsoft.SharePoint.Client.dll" 
+Add-Type -Path "c:\ISAPI\Microsoft.SharePoint.Client.Runtime.dll" 
+Add-Type -Path "c:\ISAPI\Microsoft.SharePoint.Client.Taxonomy.dll" 
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -8,13 +8,10 @@ Add-Type -Path "C:\Program Files\Common Files\microsoft shared\Web Server Extens
 $const2016CalendarListName = 'Calendrier';
 $const2016GestionTextDocsName = 'GestionTexte';
 $const2016ConseilDocsListName = 'ConseilDocs';
-, 
-$constArrayFieldsToIgnore = 'ContentType', 'Attachments', 'ParticipantsPicker' , 'FreeBusy', 'Facilities', 'Type_x0020_de_x0020_Conseil', 'Diffusion_x0020_des_x0020_docume';
+
+$constArrayFieldsToIgnore = 'ContentType', 'Attachments', 'ParticipantsPicker' , 'FreeBusy', 'Facilities';
 $constArrayGestTtextFields =  'TypeTexte' , 'Ministere', 'Statut',  'RoleNumber', 'RoleDate', 'JONumber' , 'JODate', 'TypeConseil', 'AnalystGroups', 'SignatureDate', 'TransmissionDate', 'SentDate', 'AnalyseDate', 'EnrolSendDate', 'PublishSendDate', 'MinistereID', 'TypeTexteID', 'CommentaireDepot', 'History', 'AReserve', 'OriginalName';
 $constArrayDateFields = 'EndDate', 'EventDate', 'RoleDate', 'JODate', 'SignatureDate', 'TransmissionDate' , 'SentDate', 'AnalyseDate', 'EnrolSendDate'   ;
-
-
-$backUpFolder = "\\EGOUV-SH-APP\egouv";
 
 
 function Write-In-Log_File {
@@ -33,13 +30,13 @@ function Write-In-Log_File {
 
 function Create-Log_File {
   param ($p_file_content ,  $p_message_type = 'Informations') 
-  $fileame = $backUpFolder + '\import-econseil.log';
+  $fileName = $backUpFolder + '\import-econseil.log';
 
   #If the file does not exist, create it.
-  if (-not(Test-Path -Path $fileame )) { #-PathType Leaf
+  if (-not(Test-Path -Path $fileName -PathType Leaf)) {
       try {
-          $null = New-Item -ItemType File -Path $fileame -Force -ErrorAction Stop
-          Write-Host "Le fichier de log [$fileame] a été crée."
+          $null = New-Item -ItemType File -Path $fileName -Force -ErrorAction Stop
+          Write-Host "Le fichier de log [$file] a été crée."
       }
       catch {
           throw $_.Exception.Message
@@ -49,7 +46,7 @@ function Create-Log_File {
 #      Write-Host "Le fichier log  [$file] exite déjà.";
 #      Read-Host 'Nous allons recrée le fichier le fichier, veuillez faire une sauvegarde du fichier et appuyer sur une touche'
 #    }
-  Write-In-Log_File -p_file_name  $fileame -p_file_content $p_file_content -p_message_type  $p_message_type;
+  Write-In-Log_File -p_file_name  $fileName -p_file_content $p_file_content -p_message_type  $p_message_type;
 }
  
 
@@ -106,7 +103,6 @@ function Get-ClientContext {
 function Add-CalendarListItem {
   param ([Microsoft.SharePoint.Client.ClientContext] $ctx, [string] $listName, $listItemToAdd)
 
-  
   try {  
     $lists = $ctx.web.Lists;
     $list = $lists.GetByTitle($listName); 
@@ -118,11 +114,9 @@ function Add-CalendarListItem {
     $Ligne = $listItemToAdd.Item | Select InternalName , Value;
     foreach ($c in $Ligne) { 
       $v = is-InArray -Array $constArrayFieldsToIgnore -Value $c.InternalName ;
-      #  write-host Get-FildValue -Value $c.Value -FiedName $c.InternalName;
-      if ($v -eq $false) {   
+      if ($v -eq $false) {  
          $listItem[$c.InternalName]   = Get-FildValue -Value $c.Value -FiedName $c.InternalName;
       }
-
     }
     $listItem.Update();
     $ctx.load($lists);    
@@ -178,7 +172,7 @@ function Add-DocumentProperty {
 function Add-DocumentToLibrairy (){
   param ([Microsoft.SharePoint.Client.ClientContext] $ctx, $CalendarEventID , [string] $listName, $libFolder) 
 
-  
+  try{
   $web = $ctx.Web;
   $docLib = $web.Lists.GetByTitle($listName);
   $ctx.Load($web);
@@ -188,11 +182,9 @@ function Add-DocumentToLibrairy (){
       $Files = Get-ChildItem -Path $libFolder.FullName | ? {$_.psIsContainer -eq $False -and $_.Extension -ne '.xml'}
       
        Foreach ($File in $Files) { 
-        
-       try{
-        
+       
+
         $FileFullName = $File.FullName
-        Write-Progression -Texte "Importation  $FileFullName "  
         $FileStream = New-Object IO.FileStream($FileFullName, [System.IO.FileMode]::Open)
         $FileCreationInfo = New-Object Microsoft.SharePoint.Client.FileCreationInformation
         $FileCreationInfo.Overwrite = $true
@@ -221,7 +213,7 @@ function Add-DocumentToLibrairy (){
         
         $listItem.Update();
 
-        $ctx.Load($listItem)
+         $ctx.Load($listItem)
         $ctx.Load($FileUpload)
         $ctx.ExecuteQuery()
 
@@ -230,15 +222,13 @@ function Add-DocumentToLibrairy (){
 
          
         Add-DocumentProperty -ctx $ctx -listName $const2016ConseilDocsListName -item $listItem -serverRelativeUrl $FileUpload.ServerRelativeUrl -CalendarEventID $CalendarEventID -DocuementID $id  ;
-        
-         }
-          catch {  
-            write-host "$($_.Exception.Message)" -foregroundcolor red  
-            Create-Log_File  -p_file_content  $_.Exception.Message  -p_message_type 'Exception'
-          }   
           
       }
- 
+  }
+  catch {  
+    write-host "$($_.Exception.Message)" -foregroundcolor red  
+    Create-Log_File  -p_file_content  $_.Exception.Message  -p_message_type 'Exception'
+  }   
 }
 
 
@@ -251,12 +241,8 @@ function Process-RestoreBackUp {
     Write-Progression -Texte "restauration de  $folder ..."
 
     $xmlFilePath = $folder.FullName + '\' + $folder.Name + '.xml';
-     
-
-     [xml] $xmlCalendarPropertiesFile = Repair-XmlString (Get-Content $xmlFilePath -Raw) ;
-     
-     
-    $idListItem = Add-CalendarListItem -ctx $ctx -listName $const2016CalendarListName -listItemToAdd $xmlCalendarPropertiesFile.ListItem;
+    [xml] $xmlCalendarPropertiesFile = Repair-XmlString (Get-Content $xmlFilePath -Raw) ;
+    $idListItem = Add-CalendarListItem -ctx $ctx -listName $const2016CalendarListName -listItemToAdd $xmlCalendarPropertiesFile.Document.ListItem;
     $librairiesfolder = Get-ChildItem $folder.FullName;
 
      foreach ($f in $librairiesfolder) { 
@@ -275,6 +261,7 @@ Write-Progression -Texte "Initialisation des variables de connexion..."
 $url ='http://migrationeconseil2016.gouv.ci' # "https://test-econseil2016.gouv.ci";
 $login = "GOUV\inova.econseil";
 $pwdstring = "Inov@2017";
+$backUpFolder = "\\EGOUV-SH-APP\egouv";
 
 #Execution du telechargement
  Write-Progression -Texte "Debut la de connexion..."
