@@ -1,3 +1,0 @@
-04/21/2021 08:50:00 ===> [Informations]   Debut de la sauvegarde
-04/21/2021 08:50:00 ===> [Query]   <Where><And><Geq><FieldRef Name="Created" /><Value Type="DateTime" IncludeTimeValue="True"></Value></Geq><Lt><FieldRef Name="Created" /><Value Type="DateTime" IncludeTimeValue="True"></Value></Lt></And></Where>
-04/21/2021 08:50:00 ===> [Exeception]   Le type [Microsoft.SharePoint.SPQuery] est introuvable : vérifiez que l’assembly dans lequel il se trouve est chargé.
