@@ -104,7 +104,6 @@ function Create-ListItemProperty{
  if($p_item -ne $null){
   foreach ($t_prop in $p_spField ) {
   
-  
     $str += '<item ' ;
     $str += 'InternalName="' + ($t_prop.InternalName) + '" ';
     $str += 'Title="' + ($t_prop.Title) + '" ';

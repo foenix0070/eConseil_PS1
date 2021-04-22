@@ -261,7 +261,7 @@ Write-Progression -Texte "Initialisation des variables de connexion..."
 $url ='http://migrationeconseil2016.gouv.ci' # "https://test-econseil2016.gouv.ci";
 $login = "GOUV\inova.econseil";
 $pwdstring = "Inov@2017";
-$backUpFolder = "\\EGOUV-SH-APP\egouv";
+$backUpFolder = "D:\OneDrive\Bureau\egouv";
 
 #Execution du telechargement
  Write-Progression -Texte "Debut la de connexion..."
