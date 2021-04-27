@@ -32,6 +32,11 @@ $startDate = Get-Date $start_date
 $endDate = Get-Date $end_date
 
 #Start Script
+#Create folder
+function Create-Folder{
+  param ($p_folderName )
+   New-Item -Path $p_folderName  -ItemType Directory -Force | Out-Null;
+}
 
 #Write information in log file
 function Write-In-Log_File {
@@ -84,10 +89,13 @@ function Get-Calendar_WorkSpace{
 }
 
 
+
+
+
 #Count file from librairy folder
 Function Get-Count_Files($Folder)
 {
-  $fileCount = 0;
+  [int] $fileCount = 0;
     foreach($file in $Folder.Files)
 	  {
       $fileCount += 1;
@@ -96,7 +104,8 @@ Function Get-Count_Files($Folder)
         {
 		    if($SubFolder.Name -ne "Forms")
 		    {
-          $fileCount  = $fileCount + Get-Count_Files($Subfolder)
+          $k =  Get-Count_Files($Subfolder);
+          $fileCount  = $fileCount + $k;
 			  }
 		}
     return $fileCount ;
@@ -115,13 +124,52 @@ function Get-Count_File_From_Web ($web) {
   return $fileCount;
 }
 
+#Get information to show
+function  Get-MeetingInformation  { param ($spWeb_Url,  $startDate , $endDate )
+   $arrMeeting = @();
+   $spqQuery = New-Object Microsoft.SharePoint.SPQuery;
+   $spqQuery.ViewAttributes = "Scope = 'Recursive'"
+   $spqQuery.RowLimit = 5000;
 
-function  Get-MeetingInformation  { param ($startDate , $endDate )
-  $arrMeeting = @()
+   Create-Folder -p_folderName $backUpFolder;
+
+    #Recuperation des éléments du calendrier
+    $QueryString = '<Where><And><Geq><FieldRef Name="Created" /><Value Type="DateTime" IncludeTimeValue="True">' ;
+    $QueryString += [microsoft.sharepoint.utilities.sputility]::CreateISO8601DateTimeFromSystemDateTime($startDate) ;
+    $QueryString +=  '</Value></Geq><Lt><FieldRef Name="Created" /><Value Type="DateTime" IncludeTimeValue="True">' ;
+    $QueryString += [microsoft.sharepoint.utilities.sputility]::CreateISO8601DateTimeFromSystemDateTime($endDate) ;
+    $QueryString += '</Value></Lt></And></Where>';
 
 
+    try {
 
 
+      $oWeb=Get-SPWeb $spWeb_Url;
+      $spqQuery.Query =   $QueryString
+      $sp_list_item_col = $oWeb.Lists[$listPrincipalName].getItems($spqQuery);
+        $sp_list_item_col | ForEach-Object {
+          $wsp_url = Get-Calendar_WorkSpace $_;
+          $wsp_web = Get-SPWeb $wsp_url;
+          $wsp_file_count = Get-Count_File_From_Web( $wsp_web) ;
+
+          $item = New-Object System.Object;
+          $item | Add-Member -MemberType NoteProperty -Name "Title" -Value $_["Title"];
+          $item | Add-Member -MemberType NoteProperty -Name "WorkSpace" -Value $wsp_url;
+          $item | Add-Member -MemberType NoteProperty -Name "fichiers" -Value $wsp_file_count;
+
+          $arrMeeting.Add($item);
+
+          Write-Progression -Texte 'Début :: Collecte des données ' -p_message_type $information -BackgroundColor DarkGray
+        }
+    }
+    catch {
+      Write-Progression -Texte  $_.Exception.Message  -p_message_type $erreur -BackgroundColor Red
+    }
+
+
+    $initFilePath = $backUpFolder + '\import-init_info.log';
+    $arrMeeting > $initFilePath;
+    Write-Host $arrMeeting;
 
 }
 
@@ -132,16 +180,21 @@ function  Get-MeetingInformation  { param ($startDate , $endDate )
 
 #End Script
 
+Write-Progression -Texte 'Début :: Importation du calendrier ' -p_message_type $information -BackgroundColor DarkGray
+Write-Progression -Texte 'Début :: Collecte des données ' -p_message_type $information -BackgroundColor DarkGray
+
+Get-MeetingInformation -spWeb_Url $siteUrl -startDate $startDate -endDate  $endDate
+cd $backUpFolder;
+
+
+  $action =   Read-Host  'Voulez-vous démarrer la sauvegarde ? O/N'
+  if($action -eq 'O' -or  $action -eq 'o'){
+    Process-BackUp -endDate $endDate -startDate $startDate ;
+  }
+  Read-Host 'Une touche pour terminer'
 
 
 
-
-
-
-
-
-
-Write-Progression -Texte 'Test ' -p_message_type $information -BackgroundColor Red
 
 Read-Host
 

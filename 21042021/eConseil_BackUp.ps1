@@ -164,7 +164,6 @@ function ProcessLibrairyFolderDownload {
 
     $f_folder = $p_web.GetFolder($p_folderUrl)
 
-
     foreach ($file in $f_folder.Files) {
         $f_destinationfolder = $p_destination ;
         $f_destinationfolder
@@ -229,8 +228,6 @@ function Get-LirairiesFiles{
 
         }
     }
-
-
   }
 
   return $str;
@@ -402,11 +399,10 @@ catch {
   throw $ex;
 }
 
-
-
 }
 
-get-infoBackup -endDate $endDate -startDate $startDate ;
+#get-infoBackup -endDate $endDate -startDate $startDate ;
+
 
 
 #
