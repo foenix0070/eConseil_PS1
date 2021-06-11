@@ -8,13 +8,17 @@ Add-PSSnapin Microsoft.SharePoint.UserProfile
 clear-host
 
 #CONSTANTES
+$const_Conseil_Root_FileLib = 'Secrétariat Particulier des Ministères';
 $const_Conseil_Prefix = 'eConseil_';
+$const_MetaDataFile_Prefix = 'MetaData_';
 $const_Calendar_WorkSpace_Field = 'Workspace';
-$const_Information = 'Information';
-$const_Exception = 'Exception';
-$const_File = 'File';
+#$const_Information = 'Information';
+#$const_Exception = 'Exception';
+#$const_File = 'File';
 
 #Variables
+$var_ArrMinistere = @{};
+$var_ArrTypeTexte = @{};
 $var_BackUpFolder = 'D:\\';
 $var_SiteUrl = "http://econseilv1migration.gouv.ci";
 $var_ListPrincipalName = "Calendrier";
@@ -24,12 +28,7 @@ $var_EndDate = '';
 
 #function helpers
 
-function Create-Folder{
-  param ( [string] $p_folderName )
-   if ( !(Test-Path -Path $p_folderName)) {
-    New-Item -Path  $p_folderName -ItemType Directory -Force | Out-Null;
-  }
-}
+
 
 Function Write-Log {
   [CmdletBinding()]
@@ -57,6 +56,24 @@ function Write-LogMessage {
     [String] $p_Level = "INFO" )
   $fileName = $backUpFolder + '\export-econseil.log';
   Write-Log -Level $p_Level -Message $p_file_content -logfile $fileName ;
+}
+
+function New-XmlFileWithContent{
+  param ( [string]$p_fileName , [string]$p_fileContent  )
+   $p_fileContent = '<?xml version="1.0" encoding="utf-8"?>' + $p_fileContent;
+   New-Item -Path $p_fileName  -ItemType File -Force  ;
+   Set-Content -Path  $p_fileName -Value $p_fileContent -Force | Out-Null;
+}
+
+function New-Folder{
+  param ( [string] $p_folderName )
+   if (!(Test-Path -Path $p_folderName)) {
+    New-Item -Path $p_folderName -ItemType Directory -Force | Out-Null;
+
+
+    $msg = '  ** Creation du dossier  : ' +  $p_folderName
+    Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+  }
 }
 
 function Write-RecapInformations {
@@ -111,6 +128,43 @@ Function Get-Count_Files($Folder) {
   return $fileCount ;
 }
 
+function Get-MeetingFileMetaData {
+  param ( $spFile, $spFileFolder, $rootSiteUrl, $rootLibrairy)
+
+  Write-Host "zzz***************************"
+
+  $spRootSite = Get-SPWeb $rootSiteUrl;
+  $spRootLib = $spRootSite.Lists[$rootLibrairy];
+
+  $query = New-Object Microsoft.SharePoint.SPQuery;
+  $caml ='<Where><Eq><FieldRef Name="FileLeafRef"/><Value Type="File">'+ $spFile.Name +'</Value></Eq></Where>';
+  $query.Query = $caml;
+  $query.RowLimit = 1;
+   $spRootMatchedFiles  = $spRootLib.GetItems($query);
+
+    if( $spRootMatchedFiles -ne $null ){
+      if($spRootMatchedFiles.count -gt 0 ){
+        Write-Host  "Fichier trouvé"  -ForegroundColor Red
+        $it =  $spRootMatchedFiles[0];
+
+        $strXML = '';
+        $strXML += '<property ' ;
+        $strXML += 'Ministere="' +   $it.File.Folder  + '" ';
+        $strXML += 'TypeTexte="' +   $it["Type_x0020_de_x0020_Texte"]  + '" ';
+        $strXML += 'Statut="' +   $it["Statut_x0020_d_x0027_Envoi"]   + '" ';
+        $strXML += '>' ;
+        $strXML += '</property>' ;
+        $var_ArrMinistere  +=   $it.File.Folder  ;
+        $var_ArrTypeTexte  +=   $it["Type_x0020_de_x0020_Texte"] ;
+        New-XmlFileWithContent -p_fileName $Pth -p_fileContent $strXML;
+      }
+    }
+
+Write-Host "zzz***************************"
+
+}
+
+
 #Count file from spWeb
 function Get-Count_File_From_Web ($web) {
   $fileCount = 0;
@@ -120,11 +174,6 @@ function Get-Count_File_From_Web ($web) {
   }
   return $fileCount;
 }
-
-
-
-
-
 
 #Get information to show
 function  Get-MeetingInformation {
@@ -147,7 +196,7 @@ function  Get-MeetingInformation {
 
   $sp_list_item_col = $oWeb.Lists[$var_ListPrincipalName ].getItems($spqQuery);
   $msg = 'Calcul des éléménts à sauvegarder '
-  Write-LogMessage -p_Level INFO -p_file_content    $msg ;
+  Write-LogMessage -p_Level INFO -p_file_content $msg ;
 
   $sp_list_item_col | ForEach-Object {
     try {
@@ -185,10 +234,139 @@ function  Get-MeetingInformation {
   $msg = "$count éléments du calendrier ont été traités";
   Write-LogMessage -p_Level INFO -p_file_content  $msg ;
 
-  Write-Host "Les details des informations ici : $$initFilePath";
+  Write-Host "Les details des informations ici : $initFilePath";
 
 }
 
+#Download any Spfile from url
+function DownLoadSPFile {
+  param ($spWeb_url, $str_folderPath, $str_spFileUrl )
+  $spWeb = Get-SPWeb $spWeb_url;
+
+
+  $msg = 'Téléchargement du fichier ::  ' + $str_spFileUrl ;
+  Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+
+  $File = $spWeb.GetFile($str_spFileUrl);
+  $path_file = $str_folderPath + "\" + $File.Name;
+  $Binary = $File.OpenBinary();
+  $Stream = New-Object System.IO.FileStream($path_file), Create;
+  $Writer = New-Object System.IO.BinaryWriter($Stream);
+  $Writer.write($Binary);
+  $Writer.Close();
+
+  $msg = ' * Téléchargement du fichier :: ' +  $File.Name + ' au chemin ' + $path_file ;
+  Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+
+  Get-MeetingFileMetaData -spFile $File -spFileFolder $str_folderPath -rootSiteUrl $var_SiteUrl -rootLibrairy $const_Conseil_Root_FileLib;
+
+}
+
+#Get all Librairies from Meeting WorkSpace
+#Return SpLibrairy collection
+function Get-LibrairiesFromWorkSpace {
+  param ($p_item, $str_url )
+
+  $f_sw = Get-SPWeb $str_url;
+  $f_lists = $f_sw.lists | Where-Object { ($_.hidden -eq $false) -and ($_.IsSiteAssetsLibrary -eq $false) -and ($_.BaseType -eq "DocumentLibrary")} ;
+
+  $msg = 'Recupération des bibliothèques dépuis :: ' + $str_url;
+  Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+  return $f_lists;
+}
+
+function Get-SPLibrairyMetaData {
+  param ($FolderPath, $Librairy)
+  $Pth = $FolderPath  + '\' +  $const_MetaDataFile_Prefix  + '.xml'
+  $strXML = '';
+  $strXML += '<propertyList ' ;
+  $strXML += 'RootFolder="' + ($Librairy.RootFolder.Name) + '" ';
+  $strXML += 'Title="' + ($Librairy.Title) + '" ';
+  $strXML += 'Description="' + ($Librairy.Description) + '" ';
+  $strXML += '>' ;
+  $strXML += '</propertyList>' ;
+  New-XmlFileWithContent -p_fileName $Pth -p_fileContent $strXML;
+}
+
+
+#Download all file from meeting WorkSpace by browse librairies
+function DownLoadMeetingWorkSpace {
+  param ($spListItem , $backUpFolder )
+
+  $msg = ' *Début du téléchargement de l''espace de travail ' + $spListItem['Title'] ;
+  Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+
+  $str_url = Get-Calendar_WorkSpace -p_spItem $spListItem;
+  $spLirairyCollection = Get-LibrairiesFromWorkSpace -p_item $spListItem -str_url $str_url;
+
+  $msg = ' *Nombre de bibliothèque touvé : ' +  $spLirairyCollection.count;
+  Write-LogMessage -p_Level INFO -p_file_content $msg ;
+
+  foreach ($splibrairy in $spLirairyCollection ) {
+
+    $str_folder_name = $backUpFolder + '\' + $splibrairy.Rootfolder.Name;
+
+    New-Folder -p_folderName $str_folder_name;
+
+    $docLibItems = $splibrairy.Items;
+
+    $msg = '  ** Nombre de fichier touvé : ' + $docLibItems.count
+    Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+
+
+    foreach ($docLibItem in $docLibItems) {
+      if($docLibItem.Url -Like "*.pdf") {
+        DownLoadSPFile -spWeb_url  $str_url -str_folderPath  $str_folder_name -str_spFileUrl $docLibItem.Url;
+      }
+    }
+
+   Get-SPLibrairyMetaData -FolderPath $str_folder_name -Librairy $splibrairy;
+
+  }
+}
+
+function Get-BackUp {
+    param ($backUpFolder, $spWeb_Url, $startDate , $endDate )
+
+  $spqQuery = New-Object Microsoft.SharePoint.SPQuery;
+  $spqQuery.ViewAttributes = "Scope = 'Recursive'";
+  $spqQuery.RowLimit = 5000;
+  $queryString = Get-QueryString -EndDate $endDate -StartDate $startDate;
+
+  $msg = 'Debut de la procédure d exportation dépuis  :: ' + $spWeb_Url;
+  Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+
+  Write-LogMessage -p_Level INFO -p_file_content  Requête de recuparation;
+  Write-LogMessage -p_Level INFO -p_file_content  $queryString;
+
+  $spqQuery.Query = $queryString;
+  $f_spWeb = Get-SPWeb $spWeb_Url;
+
+  Write-LogMessage -p_Level INFO -p_file_content  'Recuperation des listitem' ;
+  $sp_list_item_col = $f_spWeb.Lists[$var_ListPrincipalName].getItems($spqQuery);
+
+  $sp_list_item_col | ForEach-Object {
+    try {
+
+  $msg = 'Début Exportation  :: ' + $_["Title"];
+  Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+
+      $spMeetingFolder = $var_BackUpFolder +"\" + $const_Conseil_Prefix + $_["ID"];
+      New-Folder -p_folderName $spMeetingFolder;
+
+      DownLoadMeetingWorkSpace -backUpFolder $spMeetingFolder  -spListItem $_;
+
+      $msg = 'Fin Exportation  :: ' + $_["Title"];
+      Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+    }
+    catch {
+      Write-LogMessage -p_Level ERROR -p_file_content  $_.Exception.Message ;
+    }
+  }
+
+    $msg = 'Fin de la procédure d exportation dépuis  :: ' + $spWeb_Url;
+    Write-LogMessage -p_Level INFO -p_file_content  $msg ;
+}
 
 
 
@@ -222,20 +400,19 @@ $action = Read-Host "Voulez vous continuer la sauvegarde (O/N) ?"
 
 if ( $action -eq 'O' -or $action -eq 'o') {
 
-  Create-Folder -p_folderName $var_BackUpFolder;
-
+  New-Folder -p_folderName $var_BackUpFolder;
   Get-MeetingInformation -spWeb_Url $var_SiteUrl -startDate $var_StartDate -endDate $var_EndDate -backUpFolder  $var_BackUpFolder ;
 
   $action = Read-Host "Voulez vous continuer la sauvegarde (O/N) ?"
   if ( $action -eq 'O' -or $action -eq 'o') {
 
-
-
+    Get-BackUp -spWeb_Url $var_SiteUrl -startDate $var_StartDate  -endDate $var_EndDate -backUpFolder  $var_BackUpFolder;
 
   }else{
     exit;
   }
 }
+
 
 
 

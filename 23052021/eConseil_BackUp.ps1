@@ -237,6 +237,7 @@ function WriteFileProperty {
 }
 
 
+
 function ProcessFolder {
     param($p_web, $folderUrl , $destination )
 
@@ -300,7 +301,7 @@ function Get-LirairiesFiles{
        $msg = "Creation de la bibiloteque $str_folder_name";
        Create-Log_File -p_file_content $msg  -p_message_type  'Information' ;
 
-       $strCurrentDirectory =  Get-Location  ;
+       $strCurrentDirectory =  Get-Location ;
        $str_folder_name =   $strCurrentDirectory.Path + "/" + $str_folder_name ;
        $DocLibItems = $l.Items
 
